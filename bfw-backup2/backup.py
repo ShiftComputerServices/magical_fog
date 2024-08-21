@@ -40,6 +40,9 @@ BACKUP_CHECK = f'{BASE_PATH}/backup.check'
 BACKUP_PUT = f'{BASE_PATH}/backup.put'
 BACKUP_GET = f'{BASE_PATH}/backup.get'
 
+BACKUP_SCRIPT_URL = bfw_backup['BACKUP_SCRIPT_URL']
+BACKUP_SCRIPT_VERSION_URL = bfw_backup['BACKUP_SCRIPT_VERSION_URL']
+
 BFW_HEADER=bfw_backup['BFW_HEADER']
 
 BACKUP_TEMP_FILE = '/tmp/backup_temp.py'
@@ -64,18 +67,6 @@ try:
     logging.basicConfig(filename='/tmp/backup.log', level=logging.DEBUG)
 except Exception as e:
     sys.stdout.write(f'Error setting up logging: {e} \n')
-
-
-class FailedChecksum(Exception):
-    """Raised when checksum fails for downloaded file"""
-    def __init__(self, *args, **kwargs):
-        default_message = 'File failed checksum'
-        logging.debug(default_message)
-        if not args:
-            args = (default_message,)
-
-        # Call super constructor
-        super().__init__(*args, **kwargs)
 
 
 class BackupFailedTooSmall(Exception):
@@ -147,37 +138,30 @@ def check_for_updates():
     the backup preserving the command line parameters
     :return: Nothing
     """
-    headers = {
-        f'{BFW_HEADER[0]}': f'{BFW_HEADER[1]}'
-    }
-
-    req = Request(f'{BASE_URL}{BACKUP_CHECK}', headers=headers)
+    req = Request('BACKUP_SCRIPT_VERSION_URL')
     try:
         resource = urlopen(req)
         return_data = resource.read().strip()
-        return_data = return_data.decode('utf-8')
-
-        list_of_values = return_data.split('|')
-        hosted_version = float(list_of_values[0])
-        hosted_md5 = list_of_values[1]
+        hosted_version = float(return_data.decode('utf-8'))
 
         local_version = get_local_ver()
 
         if hosted_version > local_version:
-            # get the new version and save as backup_temp.py
-            req = Request(f'{BASE_URL}{BACKUP_GET}', headers=headers)
-            resource = urlopen(req)
-            with open(BACKUP_TEMP_FILE, 'wb') as f:
-                f.write(resource.read())
-
-            verified = check_md5(hosted_md5)
+            # get the new version and save as temp file
+            req = Request(BACKUP_SCRIPT_URL)
+            try:
+                resource = urlopen(req)
+                with open(BACKUP_TEMP_FILE, 'wb') as temp_file:
+                    temp_file.write(resource.read())
+                    temp_file.close()
+                verified = True
+            except:
+                verified = False
 
             if not verified:
                 # delete the file.
                 if os.path.isfile(BACKUP_TEMP_FILE):
                     os.remove(BACKUP_TEMP_FILE)
-                # Raise the exception
-                raise FailedChecksum
 
             else:
                 # delete the current on disk backup file, and replace with the new file from server.
@@ -194,9 +178,6 @@ def check_for_updates():
         else:
             return  # do nothing we already have the current version
 
-    except FailedChecksum:
-        logging.debug('Exception - Downloaded file failed md5 checksum, ignoring update.')
-        return
     except Exception as ex_unknown:
         logging.debug(f'unknown error: {ex_unknown}')
         return
