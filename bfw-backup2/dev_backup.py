@@ -46,7 +46,7 @@ BACKUP_SCRIPT_VERSION_URL = bfw_backup['BACKUP_SCRIPT_VERSION_URL']
 BFW_HEADER=bfw_backup['BFW_HEADER']
 
 BACKUP_TEMP_FILE = '/tmp/backup_temp.py'
-BACKUP_SCRIPT = '/var/phion/home/backup.py'
+BACKUP_SCRIPT = '/var/phion/home/dev_backup.py'
 TEMPPATH = '/tmp/'
 
 # Set default socket timeout to X seconds
