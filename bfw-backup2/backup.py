@@ -93,26 +93,6 @@ class ConnectFailed(Exception):
         super().__init__(*args, **kwargs)
 
 
-def check_md5(good_hash):
-    """
-    Check file against known good md5
-    :param good_hash: known good hash
-    :return: bool
-    """
-    file_name = BACKUP_TEMP_FILE
-
-    # Open,close, read file and calculate MD5 on its contents
-    with open(file_name, 'rb') as file_to_check:
-        # read and MD5 the file
-        data = file_to_check.read()
-        file_to_check_md5 = hashlib.md5(data).hexdigest()
-    # Finally compare original MD5 with freshly calculated
-    if good_hash == file_to_check_md5:
-        return True
-    else:
-        return False
-
-
 def get_local_ver():
     """
     checks the local backup script version
