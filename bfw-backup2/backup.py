@@ -1,5 +1,5 @@
 #!/bin/python3
-# 4.00
+# 4.01
 import logging
 import sys
 import time
@@ -254,7 +254,10 @@ def get_box_serial() -> str:
 
 
 def main():
+    check_for_updates()
+
     serial = get_box_serial()
+
     knock_at_door()
     try:
         if not check_server_access():
@@ -265,8 +268,6 @@ def main():
                 raise ConnectFailed()
     except ConnectFailed:
         quit(99)
-
-    check_for_updates()
 
     backup_file_name = f'bfw_sn_{serial}_{time.strftime("%Y%m%d-%H%M%S")}_box.par'
 
