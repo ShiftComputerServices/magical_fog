@@ -146,7 +146,7 @@ def check_for_updates():
             else:
                 # delete the current on disk backup file, and replace with the new file from server.
                 if os.path.isfile(BACKUP_SCRIPT):
-                    os.remove(BACKUP_SCRIPT)
+                    os.rename(BACKUP_SCRIPT, f'{BACKUP_SCRIPT}.prev')
                     shutil.move(BACKUP_TEMP_FILE, BACKUP_SCRIPT)
                     os.chmod(BACKUP_SCRIPT, 0o775)
 
