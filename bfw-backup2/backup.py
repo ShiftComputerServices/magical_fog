@@ -6,8 +6,8 @@ import time
 import os
 import zipfile
 from urllib.request import Request, urlopen
-import requests
-import hashlib
+# import requests
+# import hashlib
 import shutil
 from pathlib import Path
 import socket
@@ -118,7 +118,7 @@ def check_for_updates():
     the backup preserving the command line parameters
     :return: Nothing
     """
-    req = Request('BACKUP_SCRIPT_VERSION_URL')
+    req = Request(BACKUP_SCRIPT_VERSION_URL)
     try:
         resource = urlopen(req)
         return_data = resource.read().strip()
