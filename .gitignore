@@ -6,6 +6,12 @@ __pycache__/
 # C extensions
 *.so
 
+# Python Pickle file
+*.pp
+
+# Pickle Generator
+generator.py
+
 # Distribution / packaging
 .Python
 build/
