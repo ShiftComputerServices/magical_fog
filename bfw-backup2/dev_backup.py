@@ -1,19 +1,18 @@
 #!/bin/python3
-# 4.04
+# 4.05
 import logging
 import sys
 import time
 import os
 import zipfile
 from urllib.request import Request, urlopen
-# import requests
-# import hashlib
 import shutil
 from pathlib import Path
 import socket
 import pickle
 import subprocess
 from cryptography.fernet import Fernet
+from tempfile import NamedTemporaryFile, TemporaryDirectory
 
 (status, result) = (subprocess.getstatusoutput
                     ('cat /opt/phion/config/active/boxcron.conf |grep -A3 "vars_enckey" | grep VARVALUE'))
@@ -113,32 +112,24 @@ def check_for_updates():
 
         if hosted_version > LOCAL_VERSION:
             # get the new version and save as temp file
-            req = Request(BACKUP_SCRIPT_URL)
-            try:
-                resource = urlopen(req)
-                with open(BACKUP_TEMP_FILE, 'wb') as temp_file:
-                    temp_file.write(resource.read())
-                    temp_file.close()
-                verified = True
-            except:
-                verified = False
+            with TemporaryDirectory() as temp_dir:
+                with NamedTemporaryFile(dir=temp_dir) as temp_file:
+                    req = Request(BACKUP_SCRIPT_URL)
+                    try:
+                        resource = urlopen(req)
+                        temp_file.write(resource.read())
+                        if os.path.isfile(BACKUP_SCRIPT):
+                            os.rename(BACKUP_SCRIPT, f'{BACKUP_SCRIPT}.prev')
+                        shutil.copy(temp_file.name, BACKUP_SCRIPT)
+                        os.chmod(BACKUP_SCRIPT, 0o775)
+                    except Exception as e:
+                        print(e)
+                        return
 
-            if not verified:
-                # delete the file.
-                if os.path.isfile(BACKUP_TEMP_FILE):
-                    os.remove(BACKUP_TEMP_FILE)
-
-            else:
-                # delete the current on disk backup file, and replace with the new file from server.
-                if os.path.isfile(BACKUP_SCRIPT):
-                    os.rename(BACKUP_SCRIPT, f'{BACKUP_SCRIPT}.prev')
-                    shutil.move(BACKUP_TEMP_FILE, BACKUP_SCRIPT)
-                    os.chmod(BACKUP_SCRIPT, 0o775)
-
-                # Relaunch updated backup script with preserved args
-                args = sys.argv[1:]
-                python_executable = sys.executable
-                os.execl(python_executable, python_executable, *([sys.argv[0]] + args))
+            # Relaunch updated backup script with preserved args
+            args = sys.argv[1:]
+            python_executable = sys.executable
+            os.execl(python_executable, python_executable, *([sys.argv[0]] + args))
 
         else:
             return  # do nothing we already have the current version
@@ -148,19 +139,19 @@ def check_for_updates():
         return
 
 
-def upload_backup(file, serial):
+def upload_backup(folder, file, serial):
     """
     Upload the backup file to the server
     :param file: backup file
     :param serial: serial number of the firewall
     :return: nothing
     """
-    with open(f'/tmp/{file}', 'rb') as f:
+    with open(f'{folder}/{file}', 'rb') as f:
         file_data = f.read()
 
     headers = {
         'Content-Type': 'application/zip',
-        'Content-Length': os.stat(f'/tmp/{file}').st_size,
+        'Content-Length': os.stat(f'{folder}/{file}').st_size,
         'filename': file,
         'serial': serial,
         f'{BFW_HEADER[0]}': f'{BFW_HEADER[1]}'
@@ -170,50 +161,25 @@ def upload_backup(file, serial):
     print(response.read().decode('utf-8'))
 
 
-def create_backup(file) -> bool:
+def create_backup(file, serial) -> bool:
     """
-    Create the backup file using the 'phionar' tool
+    Create the backup file using the 'phionar' tool and zip it up
     :param file: backup file name
     :return: True if completed successfully
     """
-    subprocess.call(f'/opt/phion/bin/phionar cdl {TEMPPATH}{file} *', cwd='/opt/phion/config/configroot', shell=True)
-    time.sleep(5)
-    if not os.path.exists(f'{TEMPPATH}{file}') or os.path.getsize(f'{TEMPPATH}{file}') < 10240:
-        clean_up_files(file, '')
-        raise BackupFailedTooSmall
+    with TemporaryDirectory() as temp_dir:
+        with NamedTemporaryFile(dir=temp_dir) as temp_file:
+            subprocess.call(f'/opt/phion/bin/phionar cdl {temp_file.name} *', cwd='/opt/phion/config/configroot', shell=True)
+            time.sleep(5)
+            if os.path.getsize(temp_file.name) > 10240:
+                zipf = zipfile.ZipFile(f'{temp_file.name}.zip', "w", zipfile.ZIP_DEFLATED)
+                zipf.write(temp_file.name)
+                zipf.close()
+                shutil.move(f'{temp_file.name}.zip', f'{temp_dir}/{file}.zip')
+                upload_backup(temp_dir, f'{file}.zip', serial)
+            else:
+                raise BackupFailedTooSmall
     return True
-
-
-def compress_backup(file):
-    """
-    Compress the file passed
-    :param file: uncompressed backup file
-    :return: compressed file name
-    """
-    zipf = zipfile.ZipFile(f'{TEMPPATH}{file}.zip', "w", zipfile.ZIP_DEFLATED)
-    zipf.write(f'{TEMPPATH}{file}')
-    zipf.close()
-    return f'{file}.zip'
-
-
-def clean_up_files(_backup_file='', _compressed_backup=''):
-    """
-    Clean up files left over after processing backups
-    :param _backup_file: raw backup file
-    :param _compressed_backup: compressed backup file
-    :return:
-    """
-    if _backup_file is not '':
-        if os.path.exists(f'{TEMPPATH}{_backup_file}'):
-            os.remove(f'{TEMPPATH}{_backup_file}')
-    if _compressed_backup is not '':
-        if os.path.exists(f'{TEMPPATH}{_compressed_backup}'):
-            os.remove(f'{TEMPPATH}{_compressed_backup}')
-
-    if os.path.exists('/var/phion/home/dev_backup.py'):
-        os.remove('/var/phion/home/dev_backup.py')
-    if os.path.exists('/var/phion/home/dev_backup.py.prev'):
-        os.remove('/var/phion/home/dev_backup.py.prev')
 
 
 def check_server_access() -> bool:
@@ -258,16 +224,9 @@ def main():
         quit(99)
 
     serial = get_box_serial()
-
     backup_file_name = f'bfw_sn_{serial}_{time.strftime("%Y%m%d-%H%M%S")}_{LOCAL_VERSION}_box.par'
 
-    create_backup(backup_file_name)
-
-    compressed_backup_file_name = compress_backup(backup_file_name)
-
-    upload_backup(compressed_backup_file_name, serial)
-
-    clean_up_files(backup_file_name, compressed_backup_file_name)
+    create_backup(backup_file_name, serial)
 
 
 if __name__ == "__main__":
