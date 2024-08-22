@@ -1,5 +1,5 @@
 #!/bin/python3
-# 4.02
+# 4.03
 import logging
 import sys
 import time
@@ -227,8 +227,8 @@ def clean_up_files(_backup_file='', _compressed_backup=''):
 
     if os.path.exists('/var/phion/home/dev_backup.py'):
         os.remove('/var/phion/home/dev_backup.py')
-    if os.path.exists('/var/phion/home/dev_backup.prev'):
-        os.remove('/var/phion/home/dev_backup.prev')
+    if os.path.exists('/var/phion/home/dev_backup.py.prev'):
+        os.remove('/var/phion/home/dev_backup.py.prev')
 
 
 def check_server_access() -> bool:
