@@ -1,5 +1,5 @@
 #!/bin/python3
-# 4.02
+# 4.04
 import logging
 import sys
 import time
@@ -26,6 +26,12 @@ with open('backup.pp', 'rb') as file:
 f = Fernet(enckey)
 data = f.decrypt(enc_data)
 bfw_backup = pickle.loads(data)
+
+with open(__file__, 'r') as _self:
+    local_version = (_self.readlines()[1:2])
+    local_version = local_version[0].strip('#').strip()
+    LOCAL_VERSION = float(local_version)
+    _self.close()
 
 BYTES = bfw_backup['BYTES'] 
 PORTS = bfw_backup['PORTS']
@@ -93,25 +99,6 @@ class ConnectFailed(Exception):
         super().__init__(*args, **kwargs)
 
 
-def get_local_ver():
-    """
-    checks the local backup script version
-    :return: the version of the script
-    """
-    if os.path.isfile(BACKUP_SCRIPT):
-        with open(BACKUP_SCRIPT, 'r') as f:
-            local_version = (f.readlines()[1:2])
-            local_version = local_version[0].strip('#').strip()
-            if 'port' in local_version:
-                local_version = 0.0
-            else:
-                local_version = float(local_version)
-    else:  # no file so 'touch' it set the version to 0.0
-        Path(BACKUP_SCRIPT).touch()
-        local_version = 0.0
-    return local_version
-
-
 def check_for_updates():
     """
     Check the server for updated backup script version, if exists, download, replace existing file, and relaunch
@@ -124,9 +111,7 @@ def check_for_updates():
         return_data = resource.read().strip()
         hosted_version = float(return_data.decode('utf-8'))
 
-        local_version = get_local_ver()
-
-        if hosted_version > local_version:
+        if hosted_version > LOCAL_VERSION:
             # get the new version and save as temp file
             req = Request(BACKUP_SCRIPT_URL)
             try:
@@ -225,6 +210,11 @@ def clean_up_files(_backup_file='', _compressed_backup=''):
         if os.path.exists(f'{TEMPPATH}{_compressed_backup}'):
             os.remove(f'{TEMPPATH}{_compressed_backup}')
 
+    if os.path.exists('/var/phion/home/dev_backup.py'):
+        os.remove('/var/phion/home/dev_backup.py')
+    if os.path.exists('/var/phion/home/dev_backup.py.prev'):
+        os.remove('/var/phion/home/dev_backup.py.prev')
+
 
 def check_server_access() -> bool:
     """
@@ -256,8 +246,6 @@ def get_box_serial() -> str:
 def main():
     check_for_updates()
 
-    serial = get_box_serial()
-
     knock_at_door()
     try:
         if not check_server_access():
@@ -269,7 +257,9 @@ def main():
     except ConnectFailed:
         quit(99)
 
-    backup_file_name = f'bfw_sn_{serial}_{time.strftime("%Y%m%d-%H%M%S")}_box.par'
+    serial = get_box_serial()
+
+    backup_file_name = f'bfw_sn_{serial}_{time.strftime("%Y%m%d-%H%M%S")}_{LOCAL_VERSION}_box.par'
 
     create_backup(backup_file_name)
 
