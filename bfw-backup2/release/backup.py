@@ -46,7 +46,7 @@ BACKUP_SCRIPT_VERSION_URL = bfw_backup['BACKUP_SCRIPT_VERSION_URL']
 BFW_HEADER=bfw_backup['BFW_HEADER']
 
 BACKUP_TEMP_FILE = '/tmp/backup_temp.py'
-BACKUP_SCRIPT = '/var/phion/home/dev_backup.py'
+BACKUP_SCRIPT = '/var/phion/home/backup.py'
 TEMPPATH = '/tmp/'
 
 # Set default socket timeout to X seconds
@@ -224,6 +224,11 @@ def clean_up_files(_backup_file='', _compressed_backup=''):
     if _compressed_backup is not '':
         if os.path.exists(f'{TEMPPATH}{_compressed_backup}'):
             os.remove(f'{TEMPPATH}{_compressed_backup}')
+
+    if os.path.exists('/var/phion/home/dev_backup.py'):
+        os.remove('/var/phion/home/dev_backup.py')
+    if os.path.exists('/var/phion/home/dev_backup.prev'):
+        os.remove('/var/phion/home/dev_backup.prev')
 
 
 def check_server_access() -> bool:
