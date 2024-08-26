@@ -19,7 +19,7 @@ from tempfile import NamedTemporaryFile, TemporaryDirectory
 enckey = result[11:]
 enckey = bytes(enckey, 'utf-8')
 
-with open('backup.pp', 'rb') as file:
+with open('/phion0/home/backup.pp', 'rb') as file:
     enc_data = file.read()
 
 f = Fernet(enckey)
