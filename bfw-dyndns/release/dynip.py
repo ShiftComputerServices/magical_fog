@@ -3,6 +3,8 @@ import requests
 import json
 import subprocess
 import time
+from dateutil import parser
+import datetime
 
 (status, result) = (subprocess.getstatusoutput
                     ('cat /opt/phion/config/active/boxcron.conf |grep -A3 "vars_cloudflare" | grep VARVALUE'))
@@ -73,37 +75,37 @@ def cloudflare_update(data):
     return response.status_code
 
 
-def cloudflare_get_records():
+def cloudflare_get_records(serial):
     url = f'https://api.cloudflare.com/client/v4/zones/{ZONE}/dns_records'
-    return requests.get(url, headers=HEADERS).json()
+    return requests.request("GET", url, headers=HEADERS, params=f'name=contains:{serial}').json()
 
 
 def main():
     exists = False
     ip = get_ip()
     serial = get_serial()
-    response = cloudflare_get_records()
+    response = cloudflare_get_records(serial)
     if response['success']:
-        for record in response['result']:
-            if serial in record['name']:  # record exists
-                exists = True
-                print('Record exists: ')
-                (comment_text, comment_date) = record['comment'].split(':')
-                if (ip != record['content']) or (time.time() - int(comment_date) > 3600):  # lets update
-                    print('Updating Record...')
-                    DATA['content'] = record['content']
-                    DATA['name'] = record['name']
-                    DATA['comment'] = f'{comment_text}:{str(round(time.time()))}'
-                    DATA['id'] = record['id']
-                    print(cloudflare_update(DATA))
-                else:
-                    print('Record is up-to-date')
+        if response['result_info']['count'] == 1:
+            print('Record exists: ')
+            modified_time = round(parser.isoparse(response['result'][0]['modified_on']).timestamp())
+            current_time = round(datetime.datetime.now(datetime.timezone.utc).timestamp())
+            delta = current_time - modified_time
+            if (ip != response['result'][0]['content']) or (delta > 3600):  # lets update
+                print('Updating Record...')
+                DATA['content'] = response['result'][0]['content']
+                DATA['name'] = response['result'][0]['name']
+                DATA['comment'] = response['result'][0]['comment']
+                DATA['id'] = response['result'][0]['id']
+                print(cloudflare_update(DATA))
+            else:
+                print('Record is up-to-date')
 
-        if not exists:  # No record Exists, create it.
+        else:  # No record Exists, create it.
             print('No Record, creating...')
             DATA['content'] = ip
             DATA['name'] = serial
-            DATA['comment'] = f'{COMMENT}:{str(round(time.time()))}'
+            DATA['comment'] = COMMENT
             DATA['id'] = ''
             print(cloudflare_update(DATA))
     else:
