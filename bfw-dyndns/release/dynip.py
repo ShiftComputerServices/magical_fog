@@ -2,6 +2,7 @@
 import requests
 import json
 import subprocess
+import time
 
 (status, result) = (subprocess.getstatusoutput
                     ('cat /opt/phion/config/active/boxcron.conf |grep -A3 "vars_cloudflare" | grep VARVALUE'))
@@ -87,11 +88,12 @@ def main():
             if serial in record['name']:  # record exists
                 exists = True
                 print('Record exists: ')
-                if ip != record['content']:  # ip has changed, so lets update, otherwise no action.
+                (comment_text, comment_date) = record['comment'].split(':')
+                if (ip != record['content']) or (time.time() - int(comment_date) > 3600):  # lets update
                     print('Updating Record...')
                     DATA['content'] = record['content']
                     DATA['name'] = record['name']
-                    DATA['comment'] = record['comment']
+                    DATA['comment'] = f'{comment_text}:{str(round(time.time()))}'
                     DATA['id'] = record['id']
                     print(cloudflare_update(DATA))
                 else:
@@ -101,7 +103,7 @@ def main():
             print('No Record, creating...')
             DATA['content'] = ip
             DATA['name'] = serial
-            DATA['comment'] = COMMENT
+            DATA['comment'] = f'{COMMENT}:{str(round(time.time()))}'
             DATA['id'] = ''
             print(cloudflare_update(DATA))
     else:
